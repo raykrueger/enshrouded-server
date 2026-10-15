@@ -6,6 +6,42 @@ Run Enshrouded dedicated server in a container. Optionally includes helm chart f
 
 **Disclaimer:** This is not an official image. No support, implied or otherwise is offered to any end user by the author or anyone else. Feel free to do what you please with the contents of this repo.
 
+## About this fork
+
+This is a fork of [jsknnr/enshrouded-server](https://github.com/jsknnr/enshrouded-server) that fixes the container for the Enshrouded **1.0** release. The upstream `sknnr/enshrouded-dedicated-server:latest` image does not start the 1.0 server, so build the image locally from `container/` (the `compose.yaml` here uses `build: .`).
+
+Changes from upstream:
+
+- **GE-Proton 11-9.** The 1.0 server needs the `SteamUtils011` interface, which GE-Proton 10's `lsteamclient` does not provide (`[steam] Message from Steam: No SteamUtils011`).
+- **`lsteamclient` re-enabled.** With `UMU_ID` set, GE-Proton 11 runs in umu mode and disables `lsteamclient`, so Steamworks fails with `Failed to load module 'C:\Program Files (x86)\Steam\steamclient64.dll'`. The Dockerfile patches that override out of the `proton` script, and the build fails if the patch no longer applies.
+- **Direct launch.** With an absolute exe path, Proton launches through `umu.exe`, which blocks the server at startup once `lsteamclient` is enabled. The entrypoint launches `enshrouded_server.exe` by relative path so Proton runs it directly. The startup wait is also raised to 300s to cover first-boot prefix creation.
+- **Persistent install and prefix.** `compose.yaml` adds named volumes for the game install (`/home/steam/enshrouded`) and the Proton prefix (`/home/steam/steamcmd/steamapps/compatdata`), so recreating the container doesn't re-download the ~8GB server.
+- **Password from `.env`.** `compose.yaml` reads `SERVER_PASSWORD` from `container/.env` (git-ignored) and refuses to start without it:
+
+  ```bash
+  echo 'SERVER_PASSWORD=ChangeThisPlease' > container/.env
+  cd container && docker compose up -d --build
+  ```
+
+  Compose creates the volumes on first start, named after the project directory (`container_enshrouded-data`, etc.). If a save volume with that name already exists, for example one created by hand or by an older version of this compose file, Compose reuses it and warns on every start:
+
+  ```text
+  volume "container_enshrouded-data" already exists but was not created by Docker Compose. Use `external: true` to use an existing volume
+  ```
+
+  The warning is harmless. To silence it, mark the volume as external in `compose.yaml`:
+
+  ```yaml
+  volumes:
+    enshrouded-data:
+      external: true
+      name: container_enshrouded-data
+  ```
+
+Existing saves are migrated to the 1.0 format automatically on first start, and the server moves the old-format files into `savegame/migrated`. Back up the save volume before upgrading anyway.
+
+The Docker, Podman, Quadlet and Helm instructions below are from upstream and still point at the upstream image.
+
 ## Usage
 
 The processes within the container do **NOT** run as root. Everything runs as the user steam (gid:10000/uid:10000 by default). If you exec into the container, you will drop into `/home/steam` as the steam user. Enshrouded will be installed to `/home/steam/enshrouded`. Any persistent volumes should be mounted to `/home/steam/enshrouded/savegame` and be owned by 10000:10000.

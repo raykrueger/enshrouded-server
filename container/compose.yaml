@@ -12,8 +12,12 @@ services:
       - SERVER_SLOTS=16
       - SERVER_IP=0.0.0.0
     volumes:
+      - enshrouded-install:/home/steam/enshrouded
       - enshrouded-data:/home/steam/enshrouded/savegame
+      - enshrouded-prefix:/home/steam/steamcmd/steamapps/compatdata
     restart: unless-stopped
     
 volumes:
+  enshrouded-install:
+  enshrouded-prefix:
   enshrouded-data:
